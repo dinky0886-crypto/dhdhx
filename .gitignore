@@ -1,14 +1,191 @@
-# A fast, small, safe, gradually typed embeddable scripting language derived from Lua
-#
-# https://github.com/luau-lang/luau
-# https://luau.org/
+-- استخدام مجلد اللاعب المباشر لضمان استمرار التشغيل وثباته بعد الموت
+local player = game:GetService("Players").LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local camera = game:GetService("Workspace").CurrentCamera
+local TweenService = game:GetService("TweenService")
 
-# Code coverage
-coverage.out
+-- حذف أي نسخة قديمة منعاً للتداخل
+if playerGui:FindFirstChild("DeltaClassicAimbot") then
+    playerGui.DeltaClassicAimbot:Destroy()
+end
 
-# Profiling
-profile.out
-profile.svg
+-- إنشاء الواجهة بنظام الـ StarterGui التقليدي الثابت
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DeltaClassicAimbot"
+ScreenGui.ResetOnSpawn = false 
+ScreenGui.Parent = playerGui
 
-# Time trace
-trace.json
+-- [ إنشاء الزر الدائري وتحديث روابط الصور للمسار المباشر ]
+local AimButton = Instance.new("ImageButton")
+AimButton.Size = UDim2.new(0, 60, 0, 60)
+AimButton.Position = UDim2.new(0.1, 0, 0.4, 0)
+AimButton.BackgroundTransparency = 1 
+-- استخدام الرابط المباشر الكامل لضمان التحميل داخل المشغل
+AimButton.Image = "http://www.roblox.com/asset/?id=13401569300" 
+AimButton.Visible = false
+AimButton.Active = true
+AimButton.Draggable = true
+AimButton.Parent = ScreenGui
+
+-- [ إنشاء لوحة الترحيب الاحترافية الخاصة بالمطور فريد ]
+local WelcomeFrame = Instance.new("Frame")
+WelcomeFrame.Size = UDim2.new(0, 250, 0, 60)
+WelcomeFrame.Position = UDim2.new(1, 10, 0.15, 0) 
+WelcomeFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+WelcomeFrame.BackgroundTransparency = 0.1
+WelcomeFrame.BorderSizePixel = 0
+WelcomeFrame.Parent = ScreenGui
+
+local WelcomeCorner = Instance.new("UICorner")
+WelcomeCorner.CornerRadius = UDim.new(0, 10)
+WelcomeCorner.Parent = WelcomeFrame
+
+local WelcomeStroke = Instance.new("UIStroke")
+WelcomeStroke.Color = Color3.fromRGB(255, 215, 0) 
+WelcomeStroke.Thickness = 1.5
+WelcomeStroke.Parent = WelcomeFrame
+
+local WelcomeLabel = Instance.new("TextLabel")
+WelcomeLabel.Size = UDim2.new(1, -20, 1, -10)
+WelcomeLabel.Position = UDim2.new(0, 10, 0, 5)
+WelcomeLabel.BackgroundTransparency = 1
+WelcomeLabel.Text = "مطور الهاك فريد يرحب بك\nاشد الترحيب"
+WelcomeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+WelcomeLabel.TextSize = 14
+WelcomeLabel.Font = Enum.Font.SourceSansBold
+WelcomeLabel.TextXAlignment = Enum.TextXAlignment.Center
+WelcomeLabel.Parent = WelcomeFrame
+
+-- الشريط الرئيسي للكتابة
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 300, 0, 40)
+MainFrame.Position = UDim2.new(0.5, -150, 0.8, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BackgroundTransparency = 0.2
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local TextBox = Instance.new("TextBox")
+TextBox.Size = UDim2.new(0, 220, 0, 30)
+TextBox.Position = UDim2.new(0, 5, 0, 5)
+TextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextBox.Text = ""
+TextBox.PlaceholderText = "اكتب a أو una هنا..."
+TextBox.TextSize = 14
+TextBox.Parent = MainFrame
+
+local ExecButton = Instance.new("TextButton")
+ExecButton.Size = UDim2.new(0, 65, 0, 30)
+ExecButton.Position = UDim2.new(0, 230, 0, 5)
+ExecButton.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+ExecButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ExecButton.Text = "تنفيذ"
+ExecButton.TextSize = 14
+ExecButton.Parent = MainFrame
+
+local aimbotActive = false
+
+-- دالة التحقق من الجدران والحواجز عبر إطلاق الأشعة
+local function isVisible(targetCharacter)
+    if not player.Character or not player.Character:FindFirstChild("Head") then return false end
+    if not targetCharacter or not targetCharacter:FindFirstChild("HumanoidRootPart") then return false end
+    
+    local startPos = camera.CFrame.Position
+    local targetPos = targetCharacter.HumanoidRootPart.Position
+    local direction = targetPos - startPos
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {player.Character, camera}
+    raycastParams.IgnoreWater = true
+    
+    local raycastResult = game:GetService("Workspace"):Raycast(startPos, direction, raycastParams)
+    
+    if not raycastResult or raycastResult.Instance:IsDescendantOf(targetCharacter) then
+        return true
+    end
+    return false
+end
+
+-- الدالة: البحث عن أقرب لاعب حي وظاهر
+local function getClosestVisiblePlayer()
+    local closest = nil
+    local dist = math.huge
+    
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local myPos = player.Character.HumanoidRootPart.Position
+        
+        for _, v in pairs(game:GetService("Players"):GetPlayers()) do
+            if v ~= player and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and v.Character:FindFirstChild("Humanoid") then
+                if v.Character.Humanoid.Health > 0 then
+                    local d = (v.Character.HumanoidRootPart.Position - myPos).Magnitude
+                    if d < dist then
+                        if isVisible(v.Character) then
+                            dist = d
+                            closest = v
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
+
+-- [ التبديل بين الصور بالمسار الكامل عند الضغط ]
+AimButton.MouseButton1Click:Connect(function()
+    aimbotActive = not aimbotActive
+    if aimbotActive then
+        AimButton.Image = "http://www.roblox.com/asset/?id=12311414436" 
+    else
+        AimButton.Image = "http://www.roblox.com/asset/?id=13401569300" 
+    end
+end)
+
+-- حلقة التحديث المباشر للكاميرا
+game:GetService("RunService").Heartbeat:Connect(function()
+    if aimbotActive then
+        local target = getClosestVisiblePlayer()
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            pcall(function()
+                camera.CFrame = CFrame.lookAt(camera.CFrame.Position, target.Character.HumanoidRootPart.Position)
+            end)
+        end
+    end
+end)
+
+-- دالة تحريك إشعار الترحيب بشكل أنيميشن سلس لمدة 5 ثوانٍ
+local function showWelcomeNotification()
+    local tweenIn = TweenService:Create(WelcomeFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Position = UDim2.new(1, -270, 0.15, 0)
+    })
+    
+    local tweenOut = TweenService:Create(WelcomeFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+        Position = UDim2.new(1, 10, 0.15, 0)
+    })
+    
+    tweenIn:Play()
+    task.wait(5) 
+    tweenOut:Play()
+    tweenOut.Completed:Connect(function()
+        WelcomeFrame:Destroy()
+    end)
+end
+
+-- تفعيل الترحيب فوراً بمجرد تشغيل السكربت
+task.spawn(showWelcomeNotification)
+
+-- أوامر الشريط
+ExecButton.MouseButton1Click:Connect(function()
+    local input = string.lower(string.gsub(TextBox.Text, " ", ""))
+    if input == "a" then
+        AimButton.Visible = true
+    elseif input == "una" then
+        AimButton.Visible = false
+        aimbotActive = false
+        AimButton.Image = "http://www.roblox.com/asset/?id=13401569300"
+    end
+    TextBox.Text = ""
+end)
